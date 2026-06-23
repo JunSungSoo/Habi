@@ -1,0 +1,50 @@
+name: Delete merged branches
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: delete-merged-branches
+  cancel-in-progress: false
+
+jobs:
+  delete-merged-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete remote branches merged into develop
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch origin --prune
+
+          deleted=0
+          while IFS= read -r branch; do
+            case "$branch" in
+              HEAD|develop|master|archived)
+                continue
+                ;;
+            esac
+
+            echo "Deleting merged branch: $branch"
+            git push origin ":refs/heads/$branch"
+            deleted=$((deleted + 1))
+          done < <(
+            git for-each-ref \
+              --format='%(refname:strip=3)' \
+              --merged=refs/remotes/origin/develop \
+              refs/remotes/origin
+          )
+
+          echo "Deleted $deleted merged branch(es)."
